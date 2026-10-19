@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Elevator — LOOK Algorithm</title>
+<style>
+  :root{
+    --bg:#0a0e13;
+    --panel:#141b23;
+    --panel2:#10161d;
+    --line:#232f3c;
+    --text:#e3ecf5;
+    --muted:#8496a8;
+    --accent:#4cc9f0;
+    --up:#3ddc97;
+    --down:#ffb703;
+    --danger:#ff6b6b;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; }
+  body{
+    min-height:100vh;
+    padding:24px 26px 36px;
+    color:var(--text);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:
+      radial-gradient(1100px 620px at 18% -12%, #1a2532 0%, rgba(10,14,19,0) 62%),
+      radial-gradient(900px 500px at 96% 4%, #14202a 0%, rgba(10,14,19,0) 55%),
+      #0a0e13;
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{ max-width:1080px; margin:0 auto; }
+
+  /* ---------- header ---------- */
+  .head{ display:flex; align-items:flex-start; justify-content:space-between; gap:20px; margin-bottom:20px; }
+  h1{ margin:0 0 6px; font-size:26px; letter-spacing:-.4px; font-weight:650; }
+  h1 span{
+    font-size:12px; font-weight:700; letter-spacing:1.4px; vertical-align:middle;
+    color:#04212b; background:linear-gradient(180deg,#63dcff,#2aa7c9);
+    padding:3px 8px; border-radius:6px; margin-left:8px;
+  }
+  .head p{ margin:0; color:var(--muted); font-size:13px; max-width:620px; line-height:1.5; }
+  .badge{
+    flex:0 0 auto; font-size:11px; font-weight:700; letter-spacing:1.1px; text-transform:uppercase;
+    color:var(--muted); border:1px solid var(--line); background:var(--panel2);
+    padding:6px 11px; border-radius:999px; white-space:nowrap;
+  }
+  .badge.auto{ color:#04170f; background:linear-gradient(180deg,#5cf0b4,#2fbe86); border-color:#4be3a6; }
+  .badge.paused{ color:#241a00; background:linear-gradient(180deg,#ffd166,#f0a500); border-color:#ffd166; }
+
+  main{ display:flex; gap:22px; align-items:flex-start; flex-wrap:wrap; }
+  .stage-wrap{ width:640px; max-width:100%; flex:0 0 auto; position:relative; }
+
+  /* ---------- building ---------- */
+  .building{
+    position:relative; border-radius:14px; overflow:hidden;
+    background:linear-gradient(180deg,#141c26,#0d131a);
+    box-shadow:inset 0 0 0 1px #26313e, 0 34px 70px -34px #000, 0 2px 0 rgba(255,255,255,.03);
+    transform-origin:top left;
+  }
+  .floors{ position:absolute; inset:0; }
+  .floorband{ position:absolute; left:0; width:var(--sx); }
+  .floorband .wall{
+    position:absolute; inset:0;
+    background:
+      radial-gradient(120% 90% at 100% 50%, rgba(76,201,240,.055), rgba(76,201,240,0) 62%),
+      linear-gradient(180deg, rgba(255,255,255,.022), rgba(0,0,0,.05));
+    border-bottom:1px solid rgba(0,0,0,.25);
+  }
+  .floorband .slab{
+    position:absolute; left:0; right:0; bottom:0; height:8px;
+    background:linear-gradient(180deg,#3d4c5d,#1b242e 58%,#121920);
+    border-top:1px solid #52667c;
+    box-shadow:0 3px 8px -4px #000;
+  }
+  .floorband .num{
+    position:absolute; left:20px; bottom:18px;
+    font:700 30px/1 ui-monospace,SFMono-Regular,Menlo,monospace;
+    color:#435465; letter-spacing:1px;
+    text-shadow:0 1px 0 rgba(0,0,0,.4);
+  }
+  .floorband .lbl{
+    position:absolute; left:66px; bottom:24px;
+    font-size:9px; letter-spacing:2px; text-transform:uppercase; color:#3d4f61; font-weight:700;
+  }
+  .floorband .mat{
+    position:absolute; right:0; bottom:8px; width:64px; height:5px;
+    background:linear-gradient(90deg, rgba(76,201,240,0), rgba(76,201,240,.18));
+    border-radius:3px 0 0 3px;
+  }
+  .shaft{
+    position:absolute; top:0; bottom:0; left:var(--sx); width:var(--sw);
+    background:linear-gradient(180deg,#080c11,#0b1118 45%,#080c11);
+    border-left:1px solid #2b3644; border-right:1px solid #161d26;
+    box-shadow:inset 0 0 46px #000;
+  }
+  .shaft::before,.shaft::after{
+    content:""; position:absolute; top:0; bottom:0; width:1px; background:#1b2531;
+  }
+  .shaft::before{ left:24px; }
+  .shaft::after{ right:24px; }
+
+  .car{
+    position:absolute; left:var(--cx); top:0; width:var(--cw); height:var(--ch);
+    border-radius:9px; z-index:2; overflow:hidden;
+    background:linear-gradient(180deg,#3a4859,#222c37 22%,#1a222c);
+    border:1px solid #4d6076;
+    box-shadow:0 20px 34px -20px #000, inset 0 1px 0 #607a94;
+  }
+  .car::before{
+    content:""; position:absolute; inset:14px 4px 4px;
+    background:linear-gradient(180deg,#111923,#1a2431 60%,#141d27);
+    border-radius:3px; box-shadow:inset 0 6px 14px -8px #000;
+  }
+  .car .lamp{
+    position:absolute; top:4px; left:50%; margin-left:-27px; width:54px; height:3px; border-radius:2px;
+    background:#a9ecff; box-shadow:0 0 12px #4cc9f0, 0 0 26px rgba(76,201,240,.5); opacity:.8;
+  }
+  .car .disp{
+    position:absolute; top:1px; left:0; right:0; text-align:center;
+    font:700 10px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;
+    color:#9fe8ff; letter-spacing:1.4px; text-shadow:0 0 8px rgba(76,201,240,.7);
+  }
+
+  .people{ position:absolute; inset:0; z-index:3; pointer-events:none; }
+  .doors{ position:absolute; left:var(--cx); top:0; width:var(--cw); height:var(--ch); z-index:4; pointer-events:none; overflow:hidden; border-radius:9px; }
+  .door{
+    position:absolute; top:14px; height:var(--dh); width:calc(50% - 4px);
+    background:linear-gradient(90deg,#33414f,#4a5d72 44%,#3b4b5d);
+    border:1px solid #5d7288;
+    border-radius:3px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.14), inset 0 -10px 16px -12px #000;
+    will-change:transform;
+  }
+  .door::after{
+    content:""; position:absolute; top:6px; bottom:6px; width:2px;
+    background:linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,.05));
+    border-radius:2px;
+  }
+  .door.l::after{ right:4px; }
+  .door.r::after{ left:4px; }
+  .door.l{ left:3px; }
+  .door.r{ right:3px; }
+
+  .person{
+    position:absolute; left:0; top:0; width:26px; height:46px;
+    will-change:transform,opacity;
+  }
+  .person .head{
+    position:absolute; top:0; left:50%; width:12px; height:12px; margin-left:-6px;
+    border-radius:50%; background:var(--c);
+    box-shadow:inset 0 -2px 3px rgba(0,0,0,.35);
+  }
+  .person .body{
+    position:absolute; bottom:0; left:50%; width:20px; height:31px; margin-left:-10px;
+    border-radius:8px 8px 5px 5px; background:var(--c);
+    box-shadow:inset 0 -8px 10px -8px rgba(0,0,0,.55), 0 5px 9px -5px #000;
+  }
+  .person .tag{
+    position:absolute; top:-15px; left:50%; transform:translateX(-50%);
+    font-size:9px; line-height:1; color:var(--c); opacity:0; transition:opacity .18s;
+    text-shadow:0 0 6px #000, 0 0 2px #000;
+  }
+  .person.waiting .tag{ opacity:.95; }
+
+  .caption{
+    position:absolute; left:2px; right:2px; bottom:0;
+    margin:0; font-size:11.5px; color:#5f7286; line-height:1.5;
+  }
+  .caption b{ color:#8ea6bd; font-weight:600; }
+
+  /* ---------- panel ---------- */
+  .panel{ width:336px; flex:1 1 300px; display:flex; flex-direction:column; gap:13px; min-width:300px; }
+  .card{
+    background:linear-gradient(180deg,#161e27,#11171f);
+    border:1px solid var(--line); border-radius:14px; padding:14px;
+    box-shadow:0 16px 30px -26px #000;
+  }
+  .card-title{
+    font-size:10.5px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase;
+    color:#7e92a6; margin-bottom:11px; display:flex; align-items:center; justify-content:space-between;
+  }
+  .card-title .pill{
+    font-size:10px; letter-spacing:0; color:var(--accent);
+    background:rgba(76,201,240,.1); border:1px solid rgba(76,201,240,.24);
+    padding:2px 7px; border-radius:999px;
+  }
+  .selects{ display:flex; gap:10px; margin-bottom:10px; }
+  .selects label{ flex:1; display:flex; flex-direction:column; gap:5px; font-size:11px; color:#8a9dae; letter-spacing:.5px; }
+  select{
+    appearance:none; font:inherit; font-size:14px; font-weight:600; color:var(--text);
+    background:#0e151c url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%236b8098'/></svg>") no-repeat right 10px center;
+    border:1px solid #2a3744; border-radius:8px; padding:8px 26px 8px 10px; cursor:pointer;
+  }
+  select:focus-visible{ outline:2px solid var(--accent); outline-offset:1px; }
+  .btn{
+    font:inherit; font-size:13px; font-weight:600; color:#dbe6f0;
+    background:#1b242e; border:1px solid #2e3d4d; border-radius:9px;
+    padding:9px 12px; cursor:pointer; width:100%;
+    transition:background .14s, border-color .14s, transform .06s, opacity .14s;
+  }
+  .btn + .btn{ margin-top:8px; }
+  .btn:hover:not(:disabled){ background:#22303c; border-color:#3d5064; }
+  .btn:active:not(:disabled){ transform:translateY(1px); }
+  .btn:disabled{ opacity:.35; cursor:not-allowed; }
+  .btn:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  .btn.primary{
+    color:#03202a; border-color:#4fd0f0;
+    background:linear-gradient(180deg,#5ed8f7,#2aa7c9);
+  }
+  .btn.primary:hover:not(:disabled){ background:linear-gradient(180deg,#72e2fd,#33b4d8); }
+  .btn.run{ color:#04170f; border-color:#4be3a6; background:linear-gradient(180deg,#5cf0b4,#2fbe86); }
+  .btn.run:hover:not(:disabled){ background:linear-gradient(180deg,#70ffc4,#38cf93); }
+  .btn.stop{ color:#2a0808; border-color:#ff8f8f; background:linear-gradient(180deg,#ff9b9b,#e86666); }
+  .btn.stop:hover:not(:disabled){ background:linear-gradient(180deg,#ffb0b0,#f07878); }
+  .row{ display:flex; gap:8px; }
+  .row .btn + .btn{ margin-top:0; }
+  .hint{ margin:10px 1px 0; font-size:11px; line-height:1.45; color:#63788c; min-height:16px; }
+  .hint.warn{ color:var(--down); }
+
+  .stats{ display:grid; grid-template-columns:1fr 1fr; gap:1px; background:#1d2833; border:1px solid #1d2833; border-radius:9px; overflow:hidden; }
+  .stat{ background:#111821; padding:8px 10px; display:flex; flex-direction:column; gap:3px; }
+  .stat.wide{ grid-column:1 / -1; }
+  .stat .k{ font-size:9.5px; letter-spacing:1.1px; text-transform:uppercase; color:#6d8298; }
+  .stat .v{ font:600 13px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace; color:#cfe0ee; }
+  .stat .v.up{ color:var(--up); }
+  .stat .v.down{ color:var(--down); }
+  .stat .v.idle{ color:#7f93a7; }
+
+  .divider{ height:1px; background:var(--line); margin:13px 0 11px; }
+  .queue{ display:flex; flex-wrap:wrap; gap:6px; min-height:26px; align-items:flex-start; }
+  .chip{
+    display:inline-flex; align-items:center; gap:3px;
+    font:600 11.5px/1 ui-monospace,SFMono-Regular,Menlo,monospace;
+    padding:5px 8px; border-radius:7px; border:1px solid;
+  }
+  .chip i{ font-style:normal; opacity:.55; }
+  .chip.up{ color:#8bf0c4; background:rgba(61,220,151,.09); border-color:rgba(61,220,151,.28); }
+  .chip.down{ color:#ffd27a; background:rgba(255,183,3,.09); border-color:rgba(255,183,3,.28); }
+  .empty{ font-size:11.5px; color:#5c7085; font-style:italic; }
+
+  .log{ display:flex; flex-direction:column; gap:5px; font-size:11.5px; color:#8ba0b4; line-height:1.35; }
+  .logline{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .logline:first-child{ color:#c3d6e6; }
+  .logline::before{ content:"› "; color:#3f5468; }
+
+  @media (max-width:1000px){
+    body{ padding:18px 16px 28px; }
+    main{ gap:16px; }
+    .panel{ width:100%; flex:1 1 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="head">
+    <div>
+      <h1>Elevator <span>LOOK</span></h1>
+      <p>The car sweeps toward the furthest request in its direction and reverses at the last one — it never travels to a floor nobody asked for.</p>
+    </div>
+    <div class="badge" id="badge">Manual</div>
+  </header>
+
+  <main>
+    <div class="stage-wrap">
+      <div class="building" id="building">
+        <div class="floors" id="floors"></div>
+        <div class="shaft"></div>
+        <div class="car" id="car">
+          <span class="lamp"></span>
+          <span class="disp" id="carDisp">1</span>
+        </div>
+        <div class="people" id="people"></div>
+        <div class="doors" id="doors">
+          <div class="door l" id="doorL"></div>
+          <div class="door r" id="doorR"></div>
+        </div>
+      </div>
+      <p class="caption">Four floors, capacity <b>4</b>. Green arrows wait to go up, amber to go down.</p>
+    </div>
+
+    <aside class="panel">
+      <div class="card">
+        <div class="card-title">Request</div>
+        <div class="selects">
+          <label>From
+            <select id="fromSel">
+              <option value="1">1</option><option value="2">2</option>
+              <option value="3">3</option><option value="4" selected>4</option>
+            </select>
+          </label>
+          <label>To
+            <select id="toSel">
+              <option value="1" selected>1</option><option value="2">2</option>
+              <option value="3">3</option><option value="4">4</option>
+            </select>
+          </label>
+        </div>
+        <button class="btn primary" id="addBtn">Add Request</button>
+        <button class="btn" id="randomBtn">Random arrival</button>
+        <p class="hint" id="hint">Pick a start and a destination.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Simulation</div>
+        <div class="row">
+          <button class="btn run" id="runBtn">Run</button>
+          <button class="btn stop" id="stopBtn" disabled>Stop</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn" id="pauseBtn">Pause</button>
+          <button class="btn" id="resumeBtn" disabled>Resume</button>
+        </div>
+        <p class="hint" id="simHint">Run keeps sending random arrivals.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Car status</div>
+        <div class="stats">
+          <div class="stat"><span class="k">Direction</span><span class="v idle" id="sDir">● Idle</span></div>
+          <div class="stat"><span class="k">Floor</span><span class="v" id="sFloor">1</span></div>
+          <div class="stat"><span class="k">Doors</span><span class="v" id="sDoors">Closed</span></div>
+          <div class="stat"><span class="k">Load</span><span class="v" id="sLoad">0 / 4</span></div>
+          <div class="stat wide"><span class="k">Next stop</span><span class="v" id="sNext">—</span></div>
+        </div>
+        <div class="divider"></div>
+        <div class="card-title" style="margin-bottom:9px">Pending <span class="pill" id="sCount">0</span></div>
+        <div class="queue" id="queue"><span class="empty">No pending requests</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Activity</div>
+        <div class="log" id="log"><div class="logline">System ready</div></div>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+/* ------------------------------------------------------------------ *
+ *  Geometry
+ * ------------------------------------------------------------------ */
+const FLOORS   = 4;
+const FLOOR_H  = 108;
+const BW       = 640;
+const BH       = FLOORS * FLOOR_H;          // 432
+const SHAFT_X  = 452;
+const SHAFT_W  = 188;
+const CAR_W    = 148;
+const CAR_H    = 96;
+const CAR_X    = SHAFT_X + (SHAFT_W - CAR_W) / 2;   // 472
+const PH       = 46;                         // person height
+const CAP      = 4;
+
+const levelY   = n => (FLOORS - n + 1) * FLOOR_H;   // floor 1 -> 432
+const carTop   = n => levelY(n) - 6 - CAR_H;
+const standY   = n => levelY(n) - PH;
+const carSlotX = i => CAR_X + 10 + i * 34;
+const waitSlotX = i => 420 - (i % 6) * 28;
+
+/* ------------------------------------------------------------------ *
+ *  State
+ * ------------------------------------------------------------------ */
+const S = {
+  carY: carTop(1),
+  carFloor: 1,
+  targetFloor: 1,
+  moving: false,
+  dir: 0,                 // 1 up, -1 down, 0 idle
+  doorOpen: 0,
+  doorState: 'Closed',
+  paused: false,
+  running: false,
+  autoT: 0,
+  passengers: [],
+  waiting: [],
+  people: [],
+  log: [],
+  seq: 0
+};
+
+const PALETTE = ['#4cc9f0','#f72585','#3ddc97','#ffb703','#b388ff','#ff8fab','#7bdff2','#f4a261'];
+
+/* ------------------------------------------------------------------ *
+ *  DOM
+ * ------------------------------------------------------------------ */
+const $ = id => document.getElementById(id);
+const building = $('building');
+const floorsEl = $('floors');
+const carEl    = $('car');
+const carDisp  = $('carDisp');
+const peopleEl = $('people');
+const doorsEl  = $('doors');
+const doorL    = $('doorL');
+const doorR    = $('doorR');
+
+building.style.width  = BW + 'px';
+building.style.height = BH + 'px';
+building.style.setProperty('--sx', SHAFT_X + 'px');
+building.style.setProperty('--sw', SHAFT_W + 'px');
+building.style.setProperty('--cx', CAR_X + 'px');
+building.style.setProperty('--cw', CAR_W + 'px');
+building.style.setProperty('--ch', CAR_H + 'px');
+building.style.setProperty('--dh', (CAR_H - 20) + 'px');
+
+for (let n = FLOORS; n >= 1; n--) {
+  const band = document.createElement('div');
+  band.className = 'floorband';
+  band.style.top = ((FLOORS - n) * FLOOR_H) + 'px';
+  band.style.height = FLOOR_H + 'px';
+  band.innerHTML = `<span class="wall"></span><span class="num">${n}</span>` +
+                   `<span class="lbl">${n === 1 ? 'Lobby' : 'Floor ' + n}</span>` +
+                   `<span class="mat"></span><span class="slab"></span>`;
+  floorsEl.appendChild(band);
+}
+
+/* ------------------------------------------------------------------ *
+ *  Timers that respect pause
+ * ------------------------------------------------------------------ */
+const timers = [];
+function wait(ms) {
+  return new Promise(res => timers.push({ t: ms, ms, res, kind: 'wait' }));
+}
+function tween(ms, fn) {
+  return new Promise(res => timers.push({ t: ms, ms, res, kind: 'tween', fn }));
+}
+function tickTimers(dt) {
+  for (let i = timers.length - 1; i >= 0; i--) {
+    const T = timers[i];
+    T.t -= dt;
+    const p = Math.max(0, Math.min(1, 1 - T.t / T.ms));
+    if (T.kind === 'tween') T.fn(p);
+    if (T.t <= 0) { timers.splice(i, 1); T.res(); }
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ *  People
+ * ------------------------------------------------------------------ */
+function makePerson(from, to) {
+  const id = ++S.seq;
+  const dir = Math.sign(to - from);
+  const slot = S.waiting.filter(w => w.from === from).length;
+  const p = {
+    id, from, to, dir,
+    color: PALETTE[(id * 3 + 1) % PALETTE.length],
+    state: 'waiting', after: null, slot: 0,
+    x: waitSlotX(slot), y: standY(from),
+    tx: 0, ty: 0, alpha: 1, hold: 0,
+    el: null
+  };
+  const el = document.createElement('div');
+  el.className = 'person waiting';
+  el.style.setProperty('--c', p.color);
+  el.innerHTML = `<span class="head"></span><span class="body"></span>` +
+                 `<span class="tag">${dir > 0 ? '▲' : '▼'}</span>`;
+  peopleEl.appendChild(el);
+  p.el = el;
+  return p;
+}
+
+function updatePeople(dt) {
+  const count = {};
+  for (const p of S.people) {
+    if (p.state === 'waiting') {
+      const i = count[p.from] = (count[p.from] === undefined ? 0 : count[p.from] + 1);
+      p.x = waitSlotX(i);
+      p.y = standY(p.from);
+      p.alpha = 1;
+    } else if (p.state === 'walk') {
+      const dx = p.tx - p.x, dy = p.ty - p.y;
+      const d = Math.hypot(dx, dy);
+      const step = 0.42 * dt;
+      if (d <= step || d < 0.6) {
+        p.x = p.tx; p.y = p.ty;
+        if (p.after === 'ride') {
+          p.state = 'riding';
+          p.el.classList.remove('waiting');
+        } else {
+          p.state = 'leaving';
+          p.hold = 220;
+          p.el.classList.remove('waiting');
+        }
+      } else {
+        p.x += dx / d * step;
+        p.y += dy / d * step;
+      }
+    } else if (p.state === 'riding') {
+      p.x = carSlotX(p.slot);
+      p.y = S.carY + CAR_H - 8 - PH;
+    } else if (p.state === 'leaving') {
+      if (p.hold > 0) {
+        p.hold -= dt;
+      } else {
+        p.x -= 0.24 * dt;
+        p.alpha = Math.max(0, p.alpha - dt / 850);
+      }
+      if (p.alpha <= 0) p.state = 'gone';
+    }
+  }
+  for (let i = S.people.length - 1; i >= 0; i--) {
+    const p = S.people[i];
+    if (p.state === 'gone') {
+      p.el.remove();
+      S.people.splice(i, 1);
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ *  Requests
+ * ------------------------------------------------------------------ */
+function addRequest(from, to) {
+  if (from === to) return false;
+  const p = makePerson(from, to);
+  S.waiting.push(p);
+  S.people.push(p);
+  log(`Request ${from} → ${to}`);
+  refreshStatus();
+  return true;
+}
+
+function randomRequest() {
+  if (S.waiting.length >= 8) return;
+  let from = 1 + Math.floor(Math.random() * FLOORS);
+  let to = 1 + Math.floor(Math.random() * FLOORS);
+  while (to === from) to = 1 + Math.floor(Math.random() * FLOORS);
+  addRequest(from, to);
+  // keep the controls in sync with what just arrived
+  $('fromSel').value = String(from);
+  $('toSel').value = String(to);
+}
+
+/* ------------------------------------------------------------------ *
+ *  LOOK decision logic
+ * ------------------------------------------------------------------ */
+const destFloors = () => new Set([
+  ...S.waiting.map(p => p.from),
+  ...S.passengers.map(p => p.to)
+]);
+
+function destsAhead() {
+  const f = S.carFloor;
+  const out = [];
+  for (const d of destFloors()) {
+    if (S.dir > 0 ? d > f : S.dir < 0 ? d < f : false) out.push(d);
+  }
+  return out;
+}
+
+/* Can the car usefully open its doors right here, right now? */
+function canServiceHere() {
+  const f = S.carFloor;
+  if (S.passengers.some(p => p.to === f)) return true;   // someone gets off
+  if (S.passengers.length >= CAP) return false;          // full, can't take anyone
+  if (S.waiting.some(p => p.from === f && p.dir === S.dir)) return true;
+  // turnaround: nothing left ahead, so anyone here is picked up
+  if (destsAhead().length === 0 && S.waiting.some(p => p.from === f)) return true;
+  return false;
+}
+
+/* Pick the next action. Returns a floor to serve, or null. */
+function planNext() {
+  const f = S.carFloor;
+  const dests = destFloors();
+  if (dests.size === 0) { S.dir = 0; return null; }
+
+  if (S.dir === 0) {
+    const here = S.waiting.find(p => p.from === f);
+    if (here) {
+      S.dir = here.dir;
+    } else {
+      let best = null;
+      for (const d of dests) {
+        if (d === f) continue;
+        if (best === null || Math.abs(d - f) < Math.abs(best - f)) best = d;
+      }
+      S.dir = best === null ? 1 : Math.sign(best - f);
+    }
+  }
+
+  if (canServiceHere()) return f;
+
+  let ahead = destsAhead();
+  if (ahead.length) return S.dir > 0 ? Math.min(...ahead) : Math.max(...ahead);
+
+  // LOOK: reverse at the last request rather than running to the end of the shaft
+  S.dir = -S.dir;
+  ahead = destsAhead();
+  if (ahead.length) return S.dir > 0 ? Math.min(...ahead) : Math.max(...ahead);
+  return canServiceHere() ? f : null;
+}
+
+/* Non-mutating look-ahead for the status panel. */
+function peekNext() {
+  const f = S.carFloor;
+  const dests = [...destFloors()];
+  if (!dests.length) return '—';
+  const ahead = dests.filter(d => S.dir > 0 ? d > f : S.dir < 0 ? d < f : false);
+  if (ahead.length) return String(S.dir > 0 ? Math.min(...ahead) : Math.max(...ahead));
+  const rest = dests.filter(d => d !== f);
+  if (!rest.length) return String(f);
+  return String(rest.reduce((a, b) => Math.abs(b - f) < Math.abs(a - f) ? b : a));
+}
+
+/* ------------------------------------------------------------------ *
+ *  Motion
+ * ------------------------------------------------------------------ */
+const easeInOut = p => p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+
+async function moveTo(target) {
+  const from = S.carFloor;
+  const y0 = S.carY;
+  const y1 = carTop(target);
+  const dur = Math.abs(target - from) * 560 + 220;
+  S.moving = true;
+  S.targetFloor = target;
+  log(`Car ${S.dir > 0 ? 'up' : 'down'} → floor ${target}`);
+  await tween(dur, p => { S.carY = y0 + (y1 - y0) * easeInOut(p); });
+  S.carY = y1;
+  S.carFloor = target;
+  S.moving = false;
+}
+
+async function openDoors() {
+  S.doorState = 'Opening';
+  await tween(420, p => { S.doorOpen = p; });
+  S.doorOpen = 1;
+  S.doorState = 'Open';
+}
+
+async function closeDoors() {
+  S.doorState = 'Closing';
+  await tween(420, p => { S.doorOpen = 1 - p; });
+  S.doorOpen = 0;
+  S.doorState = 'Closed';
+}
+
+async function serviceFloor() {
+  const f = S.carFloor;
+  log(`Stopped at ${f}`);
+
+  // --- passengers leaving ---
+  const off = S.passengers.filter(p => p.to === f);
+  if (off.length) {
+    for (const p of off) {
+      S.passengers.splice(S.passengers.indexOf(p), 1);
+      p.state = 'walk';
+      p.after = 'exit';
+      p.tx = 232 - (p.id % 3) * 26;
+      p.ty = standY(f);
+    }
+    S.passengers.forEach((p, i) => { p.slot = i; });
+    log(`${off.length} exit at ${f}`);
+    await wait(340);
+  }
+
+  // --- decide which way to load ---
+  if (S.dir !== 0 && destsAhead().length === 0 &&
+      S.waiting.some(p => p.from === f && p.dir === -S.dir)) {
+    S.dir = -S.dir;
+    log(`Turning around at ${f}`);
+  }
+
+  // --- passengers boarding ---
+  let n = 0;
+  while (S.passengers.length < CAP) {
+    const p = S.waiting.find(w => w.from === f && w.dir === S.dir);
+    if (!p) break;
+    S.waiting.splice(S.waiting.indexOf(p), 1);
+    p.slot = S.passengers.length;
+    S.passengers.push(p);
+    p.state = 'walk';
+    p.after = 'ride';
+    p.tx = carSlotX(p.slot);
+    p.ty = S.carY + CAR_H - 8 - PH;
+    n++;
+    log(`Boarding ${p.from} → ${p.to}`);
+    await wait(380);
+  }
+
+  await wait(160);
+}
+
+/* ------------------------------------------------------------------ *
+ *  Controller
+ * ------------------------------------------------------------------ */
+async function waitForWork() {
+  while (S.waiting.length === 0 && S.passengers.length === 0) {
+    await wait(120);
+  }
+}
+
+(async function controller() {
+  while (true) {
+    try {
+      if (S.paused) { await wait(80); continue; }
+      await waitForWork();
+      const stop = planNext();
+      if (stop === null) { await wait(180); continue; }
+      if (stop !== S.carFloor) {
+        await moveTo(stop);
+        await wait(110);
+      }
+      if (!canServiceHere()) { await wait(140); continue; }
+      await openDoors();
+      await serviceFloor();
+      await closeDoors();
+      await wait(90);
+    } catch (err) {
+      console.error(err);
+      await wait(400);
+    }
+  }
+})();
+
+/* ------------------------------------------------------------------ *
+ *  Frame loop
+ * ------------------------------------------------------------------ */
+let lastT = performance.now();
+let statusT = 0;
+
+function tick(dt) {
+  tickTimers(dt);
+
+  if (S.running) {
+    S.autoT -= dt;
+    if (S.autoT <= 0) {
+      randomRequest();
+      S.autoT = 2100 + Math.random() * 1100;
+    }
+  }
+
+  updatePeople(dt);
+}
+
+function frame(now) {
+  const dt = Math.min(64, now - lastT);
+  lastT = now;
+  if (!S.paused) tick(dt);
+  paint();
+  statusT += dt;
+  if (statusT > 110) { statusT = 0; refreshStatus(); }
+  requestAnimationFrame(frame);
+}
+
+/* ------------------------------------------------------------------ *
+ *  Painting
+ * ------------------------------------------------------------------ */
+let lastDisp = '';
+let lastQueueSig = '';
+
+function paint() {
+  carEl.style.transform = `translateY(${S.carY.toFixed(2)}px)`;
+  doorsEl.style.transform = `translateY(${S.carY.toFixed(2)}px)`;
+  const slide = S.doorOpen * (CAR_W / 2 - 9);
+  doorL.style.transform = `translateX(${(-slide).toFixed(2)}px)`;
+  doorR.style.transform = `translateX(${slide.toFixed(2)}px)`;
+
+  const disp = (S.dir > 0 ? '▲ ' : S.dir < 0 ? '▼ ' : '') + (S.moving ? S.targetFloor : S.carFloor);
+  if (disp !== lastDisp) { carDisp.textContent = disp; lastDisp = disp; }
+
+  for (const p of S.people) {
+    p.el.style.transform = `translate3d(${p.x.toFixed(1)}px,${p.y.toFixed(1)}px,0)`;
+    p.el.style.opacity = p.alpha.toFixed(2);
+  }
+}
+
+function refreshStatus() {
+  const dirEl = $('sDir');
+  dirEl.textContent = S.dir > 0 ? '▲ Up' : S.dir < 0 ? '▼ Down' : '● Idle';
+  dirEl.className = 'v ' + (S.dir > 0 ? 'up' : S.dir < 0 ? 'down' : 'idle');
+
+  $('sFloor').textContent = S.moving ? `${S.carFloor} → ${S.targetFloor}` : String(S.carFloor);
+  $('sDoors').textContent = S.doorState;
+  $('sLoad').textContent = `${S.passengers.length} / ${CAP}`;
+  $('sNext').textContent = peekNext();
+  $('sCount').textContent = String(S.waiting.length);
+
+  const list = [...S.waiting].sort((a, b) => a.from - b.from || a.dir - b.dir);
+  const sig = list.map(p => p.id).join(',');
+  if (sig !== lastQueueSig) {
+    lastQueueSig = sig;
+    $('queue').innerHTML = list.length
+      ? list.map(p => `<span class="chip ${p.dir > 0 ? 'up' : 'down'}">${p.from}<i>→</i>${p.to}</span>`).join('')
+      : `<span class="empty">No pending requests</span>`;
+  }
+
+  const badge = $('badge');
+  if (S.paused) { badge.textContent = 'Paused'; badge.className = 'badge paused'; }
+  else if (S.running) { badge.textContent = 'Auto'; badge.className = 'badge auto'; }
+  else { badge.textContent = 'Manual'; badge.className = 'badge'; }
+}
+
+function log(msg) {
+  S.log.unshift(msg);
+  if (S.log.length > 6) S.log.pop();
+  $('log').innerHTML = S.log.map(m => `<div class="logline">${m}</div>`).join('');
+}
+
+/* ------------------------------------------------------------------ *
+ *  UI
+ * ------------------------------------------------------------------ */
+const hintEl = $('hint');
+let hintTimer = null;
+
+function hint(text, warn) {
+  hintEl.textContent = text;
+  hintEl.className = 'hint' + (warn ? ' warn' : '');
+  clearTimeout(hintTimer);
+  hintTimer = setTimeout(() => {
+    hintEl.textContent = 'Pick a start and a destination.';
+    hintEl.className = 'hint';
+  }, 2600);
+}
+
+function syncButtons() {
+  $('runBtn').disabled = S.running;
+  $('stopBtn').disabled = !S.running;
+  $('pauseBtn').disabled = S.paused;
+  $('resumeBtn').disabled = !S.paused;
+  $('simHint').textContent = S.paused
+    ? 'Paused — queue more requests, then resume.'
+    : S.running ? 'Auto arrivals running every ~2.5s.' : 'Run keeps sending random arrivals.';
+}
+
+$('addBtn').addEventListener('click', () => {
+  const from = +$('fromSel').value;
+  const to = +$('toSel').value;
+  if (from === to) { hint('From and To must differ.', true); return; }
+  addRequest(from, to);
+  hint(`Queued ${from} → ${to}.`);
+});
+
+$('randomBtn').addEventListener('click', () => {
+  randomRequest();
+  hint('Random arrival added.');
+});
+
+$('runBtn').addEventListener('click', () => {
+  S.running = true;
+  S.autoT = 500;
+  log('Automatic operation started');
+  syncButtons();
+});
+
+$('stopBtn').addEventListener('click', () => {
+  S.running = false;
+  log('Automatic operation stopped');
+  syncButtons();
+});
+
+$('pauseBtn').addEventListener('click', () => {
+  S.paused = true;
+  log('Simulation paused');
+  syncButtons();
+});
+
+$('resumeBtn').addEventListener('click', () => {
+  S.paused = false;
+  log('Simulation resumed');
+  syncButtons();
+});
+
+/* scale the building down when the viewport is narrow */
+function fit() {
+  const wrap = document.querySelector('.stage-wrap');
+  const avail = wrap.clientWidth;
+  const scale = Math.min(1, avail / BW);
+  building.style.transform = `scale(${scale})`;
+  wrap.style.height = (BH * scale + 44) + 'px';
+}
+window.addEventListener('resize', fit);
+fit();
+syncButtons();
+refreshStatus();
+paint();
+
+requestAnimationFrame(frame);
+
+/* debug hook */
+window.__elevator = {
+  state: S,
+  addRequest,
+  randomRequest,
+  planNext,
+  canServiceHere,
+  destFloors
+};
+})();
+</script>
+</body>
+</html>
